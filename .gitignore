@@ -1,0 +1,41 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+*.egg
+*.whl
+
+# Virtual environments
+venv/
+.venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Flatpak build
+build-flatpak/
+.flatpak-builder/
+
+# PyInstaller
+*.spec
+
+# Test artifacts
+.coverage
+htmlcov/
+.pytest_cache/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# myTime user data (config/history at runtime)
+config.json
+history.json
+state.json
+recent_tasks.json

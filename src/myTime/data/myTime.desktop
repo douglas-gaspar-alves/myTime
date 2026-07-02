@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=myTime
+Comment=Gerenciador inteligente de Pomodoro e Jornadas
+Exec=myTime
+Icon=myTime
+Categories=Utility;Office;ProjectManagement;
+Terminal=false
+StartupNotify=true
+X-GNOME-Autostart-enabled=false

@@ -1,0 +1,42 @@
+app-id: io.github.mytime
+runtime: org.kde.Platform
+runtime-version: '6.9'
+sdk: org.kde.Sdk
+command: myTime
+
+finish-args:
+  - --share=ipc
+  - --socket=x11
+  - --socket=wayland
+  - --device=dri
+  - --socket=pulseaudio
+
+modules:
+  - name: python3-deps
+    build-options:
+      network: true
+    buildsystem: simple
+    build-commands:
+      - pip3 install --prefix=/app PySide6
+
+  - name: myTime
+    buildsystem: simple
+    build-commands:
+      - cp -r src/myTime /app/share/myTime
+      - install -Dm644 /app/share/myTime/data/entry.sh /app/bin/myTime
+      - |
+        cat > /app/share/applications/io.github.mytime.desktop << 'EOF'
+        [Desktop Entry]
+        Type=Application
+        Name=myTime
+        Comment=Gerenciador inteligente de Pomodoro e Jornadas
+        Exec=myTime
+        Icon=io.github.mytime
+        Categories=Utility;Office;ProjectManagement;
+        Terminal=false
+        StartupNotify=true
+        EOF
+      - install -Dm644 /app/share/myTime/data/icons/myTime.svg /app/share/icons/hicolor/scalable/apps/io.github.mytime.svg
+    sources:
+      - type: dir
+        path: ../src

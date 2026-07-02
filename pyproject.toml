@@ -1,0 +1,59 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "myTime"
+version = "0.1.0"
+description = "Gerenciador de tempo de trabalho com Pomodoro e jornadas"
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.11"
+dependencies = [
+    "PySide6>=6.6.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-qt>=4.2.0",
+    "pytest-cov>=4.1.0",
+    "ruff>=0.1.0",
+    "mypy>=1.7.0",
+    "pyinstaller>=6.0.0",
+]
+
+[project.scripts]
+myTime = "myTime.__main__:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+"myTime" = ["locales/*.json", "data/icons/*.svg", "data/*.desktop"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_functions = ["test_*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "W"]
+ignore = ["E501"]
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false
+
+[tool.pyinstaller]
+name = "myTime"
+onefile = true
+windowed = true
+add-data = ["src/myTime/locales:locales", "src/myTime/data:data"]
+hidden-import = ["PySide6.QtCore", "PySide6.QtGui", "PySide6.QtWidgets"]
