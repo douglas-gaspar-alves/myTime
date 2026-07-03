@@ -16,6 +16,7 @@ class TrayManager(QObject):
     task_change_requested = Signal(str)
     pause_toggle_requested = Signal()
     skip_session_requested = Signal()
+    continue_requested = Signal()
     restart_progress_requested = Signal()
     restart_session_requested = Signal()
     show_main_requested = Signal()
@@ -36,9 +37,11 @@ class TrayManager(QObject):
         self.tray = QSystemTrayIcon()
         self.tray.setToolTip("myTime - Pronto para iniciar")
 
+        self._is_waiting = False
         self.status_action: QAction | None = None
         self.task_action: QAction | None = None
         self.pause_action: QAction | None = None
+        self.continue_action: QAction | None = None
         self.restart_progress_action: QAction | None = None
         self.restart_session_action: QAction | None = None
 
@@ -74,6 +77,11 @@ class TrayManager(QObject):
         self.pause_action = QAction("Pausar", menu)
         self.pause_action.triggered.connect(self.pause_toggle_requested.emit)
         menu.addAction(self.pause_action)
+
+        self.continue_action = QAction("▶ Continuar", menu)
+        self.continue_action.triggered.connect(self.continue_requested.emit)
+        self.continue_action.setVisible(False)
+        menu.addAction(self.continue_action)
 
         act = QAction("Pular Sessão", menu)
         act.triggered.connect(self.skip_session_requested.emit)
@@ -161,8 +169,11 @@ class TrayManager(QObject):
         status: SessionStatus,
         remaining_seconds: int,
         total_seconds: int,
+        is_waiting: bool = False,
     ) -> None:
         """Update tray icon, tooltip, and menu status."""
+        if is_waiting:
+            self._is_waiting = True
         mins, secs = divmod(remaining_seconds, 60)
         if self.config.icon_text_show_seconds:
             self._time_text = f"{mins:02d}:{secs:02d}"
@@ -174,6 +185,9 @@ class TrayManager(QObject):
         if status == SessionStatus.PAUSED:
             self._current_state = "paused"
             status_text = f"[PAUSADO] {self._time_text}"
+        elif self._is_waiting and status == SessionStatus.IDLE:
+            self._current_state = "idle"
+            status_text = "▶ Aguardando continuar"
         elif session_type == SessionType.WORK:
             self._current_state = "work"
             status_text = f"Foco: {self._time_text}"
@@ -202,6 +216,9 @@ class TrayManager(QObject):
 
         if self.pause_action:
             self.pause_action.setText("Retomar" if status == SessionStatus.PAUSED else "Pausar")
+
+        if self.continue_action:
+            self.continue_action.setVisible(self._is_waiting and status == SessionStatus.IDLE)
 
         self._update_icon()
 
@@ -259,6 +276,12 @@ class TrayManager(QObject):
         """Update config reference and refresh icon."""
         self.config = config
         self._update_icon()
+
+    def set_waiting_continue(self, waiting: bool) -> None:
+        """Set whether we are waiting for user to continue after a block."""
+        self._is_waiting = waiting
+        if self.continue_action:
+            self.continue_action.setVisible(waiting)
 
     def cleanup(self) -> None:
         """Clean up tray icon."""

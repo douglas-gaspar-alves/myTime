@@ -135,6 +135,9 @@ class AppState:
     current_task: str = ""
     session_start_time: Optional[datetime] = None
     paused_at: Optional[datetime] = None
+    journey_total_minutes: int = 0
+    current_block_index: int = -1
+    is_waiting_continue: bool = False
 
     def to_dict(self) -> dict:
         return {
@@ -146,6 +149,9 @@ class AppState:
             "current_task": self.current_task,
             "session_start_time": self.session_start_time.isoformat() if self.session_start_time else None,
             "paused_at": self.paused_at.isoformat() if self.paused_at else None,
+            "journey_total_minutes": self.journey_total_minutes,
+            "current_block_index": self.current_block_index,
+            "is_waiting_continue": self.is_waiting_continue,
         }
 
     @classmethod
@@ -157,6 +163,10 @@ class AppState:
             d["session_start_time"] = datetime.fromisoformat(d["session_start_time"])
         if d.get("paused_at"):
             d["paused_at"] = datetime.fromisoformat(d["paused_at"])
+        # Default new fields for old state files
+        d.setdefault("journey_total_minutes", 0)
+        d.setdefault("current_block_index", -1)
+        d.setdefault("is_waiting_continue", False)
         return cls(**d)
 
 

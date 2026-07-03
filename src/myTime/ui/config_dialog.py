@@ -184,7 +184,7 @@ class ConfigDialog(QDialog):
         
         sound_file_layout = QHBoxLayout()
         self.sound_file = QLineEdit()
-        self.sound_file.setPlaceholderText("Usar som do sistema (freedesktop)")
+        self.sound_file.setPlaceholderText("Usar som embutido ou do sistema")
         self.sound_file.setReadOnly(True)
         sound_file_layout.addWidget(self.sound_file)
         
@@ -343,13 +343,14 @@ class ConfigDialog(QDialog):
 
     def _update_preview_frame(self, preview: QFrame, text: str) -> None:
         color = QColor(text)
+        border_color = preview.palette().color(preview.foregroundRole()).darker(130).name()
         if color.isValid():
             preview.setStyleSheet(
-                f"background-color: {color.name()}; border: 2px solid #555; border-radius: 4px;"
+                f"background-color: {color.name()}; border: 2px solid {border_color}; border-radius: 4px;"
             )
         else:
             preview.setStyleSheet(
-                "background-color: white; border: 2px solid #555; border-radius: 4px;"
+                f"background-color: white; border: 2px solid {border_color}; border-radius: 4px;"
             )
 
     def _build_advanced_tab(self) -> None:
@@ -425,6 +426,9 @@ class ConfigDialog(QDialog):
         
         self.enable_notifications.setChecked(c.notifications_enabled)
         self.enable_sounds.setChecked(c.sound_enabled)
+        bundled = self.notification_mgr.get_bundled_sound_path()
+        if bundled:
+            self.sound_file.setPlaceholderText(f"Som embutido: {bundled}")
         
         self._update_preview()
         self._update_config_dir_label()

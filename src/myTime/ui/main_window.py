@@ -5,7 +5,7 @@ from PySide6.QtWidgets import (
     QFrame, QSizePolicy, QInputDialog, QLineEdit,
 )
 from PySide6.QtCore import Qt, Signal, QTimer
-from PySide6.QtGui import QFont, QPixmap, QPainter, QColor, QBrush, QPen
+from PySide6.QtGui import QFont, QPixmap, QPainter, QColor, QBrush, QPen, QPalette
 from myTime.core.models import SessionType, SessionStatus, WorkSchedule
 from myTime.core.engine import ScheduledBlock
 from myTime.utils import IconManager
@@ -27,20 +27,30 @@ class _BlockWidget(QFrame):
         elif block.session_type == SessionType.LONG_BREAK:
             label = "L"
 
+        pal = self.palette()
         if is_current:
+            bg = pal.color(QPalette.ColorRole.Highlight)
+            border = bg.darker(120)
+            text_color = pal.color(QPalette.ColorRole.HighlightedText)
             self.setStyleSheet(
-                "background-color: #e74c3c; border: 3px solid #c0392b; "
-                "border-radius: 6px; color: white; font-weight: bold;"
+                f"background-color: {bg.name()}; border: 3px solid {border.name()}; "
+                f"border-radius: 6px; color: {text_color.name()}; font-weight: bold;"
             )
         elif is_past:
+            bg = pal.color(QPalette.ColorRole.Midlight)
+            border = pal.color(QPalette.ColorRole.Mid)
+            text_color = pal.color(QPalette.ColorRole.Mid)
             self.setStyleSheet(
-                "background-color: #bdc3c7; border: 1px solid #95a5a6; "
-                "border-radius: 6px; color: #7f8c8d;"
+                f"background-color: {bg.name()}; border: 1px solid {border.name()}; "
+                f"border-radius: 6px; color: {text_color.name()};"
             )
         else:
+            bg = pal.color(QPalette.ColorRole.Button)
+            border = pal.color(QPalette.ColorRole.Button).darker(110)
+            text_color = pal.color(QPalette.ColorRole.ButtonText)
             self.setStyleSheet(
-                "background-color: #34495e; border: 1px solid #2c3e50; "
-                "border-radius: 6px; color: white;"
+                f"background-color: {bg.name()}; border: 1px solid {border.name()}; "
+                f"border-radius: 6px; color: {text_color.name()};"
             )
 
         layout = QVBoxLayout(self)
@@ -69,6 +79,7 @@ class MainWindow(QWidget):
 
     pause_toggled = Signal()
     skip_requested = Signal()
+    continue_requested = Signal()
     new_journey_requested = Signal()
     config_requested = Signal()
     task_change_requested = Signal(str)
@@ -86,6 +97,7 @@ class MainWindow(QWidget):
         self._journey_blocks: list[ScheduledBlock] = []
         self._journey_block_index = -1
         self._is_paused = False
+        self._is_waiting = False
 
         self.setWindowTitle("myTime")
         self.setFixedSize(380, 520)
@@ -94,6 +106,10 @@ class MainWindow(QWidget):
         )
 
         self._build_ui()
+
+    def closeEvent(self, event):
+        event.ignore()
+        self.hide()
 
     def _build_ui(self) -> None:
         layout = QVBoxLayout(self)
@@ -140,6 +156,12 @@ class MainWindow(QWidget):
 
         # Buttons
         btn_row = QHBoxLayout()
+        self.continue_btn = QPushButton("▶ Continuar")
+        self.continue_btn.setMinimumHeight(36)
+        self.continue_btn.clicked.connect(self.continue_requested.emit)
+        self.continue_btn.setVisible(False)
+        btn_row.addWidget(self.continue_btn)
+
         self.pause_btn = QPushButton("⏸ Pausar")
         self.pause_btn.setMinimumHeight(36)
         self.pause_btn.clicked.connect(self.pause_toggled.emit)
@@ -203,6 +225,7 @@ class MainWindow(QWidget):
         status: SessionStatus,
         remaining_seconds: int,
         total_seconds: int,
+        is_waiting: bool = False,
     ) -> None:
         self._session_type = session_type
         self._status = status
@@ -212,12 +235,23 @@ class MainWindow(QWidget):
         mins, secs = divmod(remaining_seconds, 60)
         time_text = f"{mins:02d}:{secs:02d}" if self.config.icon_text_show_seconds else f"{mins:02d}"
 
+        self._is_waiting = is_waiting
+
         if status == SessionStatus.PAUSED:
             self._is_paused = True
+            self.continue_btn.setVisible(False)
+            self.pause_btn.setVisible(True)
             self.pause_btn.setText("▶ Retomar")
             self.status_label.setText(f"⏸ PAUSADO {time_text}")
+        elif is_waiting and status == SessionStatus.IDLE:
+            self._is_paused = False
+            self.continue_btn.setVisible(True)
+            self.pause_btn.setVisible(False)
+            self.status_label.setText("▶ Aguardando continuar")
         else:
             self._is_paused = False
+            self.continue_btn.setVisible(False)
+            self.pause_btn.setVisible(True)
             self.pause_btn.setText("⏸ Pausar")
             type_map = {
                 SessionType.WORK: "Foco",
@@ -229,7 +263,7 @@ class MainWindow(QWidget):
 
         pause_enabled = status in (SessionStatus.RUNNING, SessionStatus.PAUSED)
         self.pause_btn.setEnabled(pause_enabled)
-        self.skip_btn.setEnabled(status == SessionStatus.RUNNING)
+        self.skip_btn.setEnabled(status in (SessionStatus.RUNNING, SessionStatus.IDLE))
 
         self._render_clock(session_type, status, remaining_seconds, total_seconds)
 
@@ -294,6 +328,13 @@ class MainWindow(QWidget):
     def set_journey_active(self, active: bool) -> None:
         self.blocks_widget.setVisible(active)
 
+    def set_waiting_continue(self, waiting: bool) -> None:
+        self._is_waiting = waiting
+        self.continue_btn.setVisible(waiting)
+        self.pause_btn.setVisible(not waiting)
+        if waiting:
+            self.status_label.setText("▶ Aguardando continuar")
+
     def _rebuild_blocks(self) -> None:
         while self.blocks_row.count():
             item = self.blocks_row.takeAt(0)
@@ -308,7 +349,9 @@ class MainWindow(QWidget):
 
             if i < len(self._journey_blocks) - 1:
                 arrow = QLabel("→")
-                arrow.setStyleSheet("color: #7f8c8d; font-size: 14px;")
+                pal = self.palette()
+                arrow_color = pal.color(QPalette.ColorRole.Mid).name()
+                arrow.setStyleSheet(f"color: {arrow_color}; font-size: 14px;")
                 self.blocks_row.addWidget(arrow)
 
         total_work = sum(b.duration_seconds for b in self._journey_blocks if b.is_work_block)

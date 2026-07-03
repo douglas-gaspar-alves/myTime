@@ -1,11 +1,12 @@
 """Main application class."""
 from __future__ import annotations
+import os
 import sys
 from datetime import datetime, timedelta
 from typing import Optional
 from importlib.resources import files as resource_files
 from PySide6.QtGui import QIcon
-from PySide6.QtWidgets import QApplication, QMessageBox, QSystemTrayIcon
+from PySide6.QtWidgets import QApplication, QMessageBox, QSystemTrayIcon, QStyleFactory
 from PySide6.QtCore import QTimer, QObject, Slot
 
 from myTime.core.models import (
@@ -50,6 +51,8 @@ class MyTimeApp(QObject):
         self.current_task = ""
         self.session_start_time: Optional[datetime] = None
         self._paused_remaining: Optional[int] = None
+        self._is_waiting_continue = False
+        self._state_restored = False
         
         # Timer
         self.timer = QTimer()
@@ -76,8 +79,10 @@ class MyTimeApp(QObject):
         self.tray.restart_session_requested.connect(self.restart_session)
         self.tray.quit_requested.connect(self.quit)
 
+        self.tray.continue_requested.connect(self.continue_journey)
         self.tray.show_main_requested.connect(self._show_main)
         self.main_window.pause_toggled.connect(self.toggle_pause)
+        self.main_window.continue_requested.connect(self.continue_journey)
         self.main_window.skip_requested.connect(self.skip_session)
         self.main_window.new_journey_requested.connect(self.tray._request_new_journey)
         self.main_window.config_requested.connect(self.show_config)
@@ -87,6 +92,8 @@ class MyTimeApp(QObject):
     
     def _show_welcome(self) -> None:
         """Show tray notification and start journey dialog on launch."""
+        if self._state_restored:
+            return
         tray_msg = self._notif_msg()
         if tray_msg:
             self.tray.show_message(
@@ -116,9 +123,87 @@ class MyTimeApp(QObject):
     def _restore_state(self) -> None:
         """Restore previous session state if any."""
         saved_state = self.storage.load_state()
-        if saved_state and saved_state.current_status != SessionStatus.IDLE:
-            # Could restore journey here if needed
-            pass
+        if not saved_state or saved_state.current_block_index < 0:
+            return
+        if not saved_state.journey_total_minutes:
+            return
+
+        self._state_restored = True
+        self.current_block_index = saved_state.current_block_index
+        self.current_task = saved_state.current_task
+        self._is_waiting_continue = saved_state.is_waiting_continue
+
+        # Recalculate journey blocks
+        self.journey_blocks = self.engine.calculate_journey(
+            saved_state.journey_total_minutes,
+            self.current_task
+        )
+
+        if self.current_block_index >= len(self.journey_blocks):
+            self.storage.clear_state()
+            return
+
+        block = self.journey_blocks[self.current_block_index]
+
+        self.tray.set_journey_data(self.journey_blocks, self.current_block_index, self.current_task)
+        self.tray.set_journey_active(True)
+        self.tray.set_waiting_continue(self._is_waiting_continue)
+        self.main_window.set_waiting_continue(self._is_waiting_continue)
+        self.main_window.set_journey_data(self.journey_blocks, self.current_block_index)
+        self.main_window.set_journey_active(True)
+        self.main_window.set_task(self.current_task)
+
+        if saved_state.current_status == SessionStatus.RUNNING and saved_state.session_start_time:
+            # Resume running session
+            elapsed = int((datetime.now() - saved_state.session_start_time).total_seconds())
+            remaining = max(0, block.duration_seconds - elapsed)
+
+            if remaining > 0:
+                self.session_start_time = saved_state.session_start_time
+                self.timer.start()
+                self.tray.update_status(
+                    block.session_type, SessionStatus.RUNNING,
+                    remaining, block.duration_seconds
+                )
+                self.main_window.update_status(
+                    block.session_type, SessionStatus.RUNNING,
+                    remaining, block.duration_seconds
+                )
+            else:
+                # Session already expired, mark as completed
+                self.session_start_time = saved_state.session_start_time or datetime.now()
+                self._complete_current_block()
+
+        elif saved_state.current_status == SessionStatus.PAUSED:
+            # Resume paused state
+            remaining = saved_state.remaining_seconds
+            self._paused_remaining = remaining
+            elapsed_so_far = block.duration_seconds - remaining
+            self.session_start_time = datetime.now() - timedelta(seconds=elapsed_so_far)
+            self.tray.update_status(
+                block.session_type, SessionStatus.PAUSED,
+                remaining, block.duration_seconds
+            )
+            self.main_window.update_status(
+                block.session_type, SessionStatus.PAUSED,
+                remaining, block.duration_seconds
+            )
+
+        elif self._is_waiting_continue:
+            # Waiting for user to continue after block completion
+            self.tray.update_status(
+                block.session_type, SessionStatus.IDLE,
+                block.duration_seconds, block.duration_seconds,
+                is_waiting=True
+            )
+            self.main_window.update_status(
+                block.session_type, SessionStatus.IDLE,
+                block.duration_seconds, block.duration_seconds,
+                is_waiting=True
+            )
+
+        # Show main window if there's an active session
+        QTimer.singleShot(500, self._show_main)
     
     @Slot(int, str)
     def start_journey(self, total_work_minutes: int, task_name: str = "") -> None:
@@ -157,6 +242,10 @@ class MyTimeApp(QObject):
         if self.current_block_index >= len(self.journey_blocks):
             self._journey_complete()
             return
+
+        self._is_waiting_continue = False
+        self.tray.set_waiting_continue(False)
+        self.main_window.set_waiting_continue(False)
         
         block = self.journey_blocks[self.current_block_index]
         self.session_start_time = datetime.now()
@@ -259,24 +348,30 @@ class MyTimeApp(QObject):
                 self._start_current_block()
             else:
                 # Show notification but wait for user
+                self._is_waiting_continue = True
+                self.tray.set_waiting_continue(True)
+                self.main_window.set_waiting_continue(True)
                 self.tray.update_status(
                     next_block.session_type,
                     SessionStatus.IDLE,
                     next_block.duration_seconds,
-                    next_block.duration_seconds
+                    next_block.duration_seconds,
+                    is_waiting=True
                 )
                 self.main_window.update_status(
                     next_block.session_type,
                     SessionStatus.IDLE,
                     next_block.duration_seconds,
-                    next_block.duration_seconds
+                    next_block.duration_seconds,
+                    is_waiting=True
                 )
                 # Notify user next block is ready
                 if next_block.is_work_block:
                     self.notification_mgr.send_custom(
                         "Próximo Foco Pronto",
-                        f"Clique para iniciar: {next_block.task_name or 'Trabalho'}",
-                        icon="media-playback-start"
+                        f"Clique para continuar: {next_block.task_name or 'Trabalho'}",
+                        icon="media-playback-start",
+                        session_type=next_block.session_type,
                     )
                 else:
                     self.notification_mgr.send_break_reminder(
@@ -312,6 +407,9 @@ class MyTimeApp(QObject):
         self.journey_blocks = []
         self.current_block_index = -1
         self._paused_remaining = None
+        self._is_waiting_continue = False
+        self.tray.set_waiting_continue(False)
+        self.main_window.set_waiting_continue(False)
         self.tray.set_journey_active(False)
         self.main_window.set_journey_active(False)
         self.storage.clear_state()
@@ -373,17 +471,24 @@ class MyTimeApp(QObject):
             )
             self.storage.append_session(record)
             
-            self.timer.stop()
-            self._paused_remaining = None
-            self.current_block_index += 1
+        if self.current_block_index < len(self.journey_blocks):
+            if self.journey_blocks[self.current_block_index].is_work_block:
+                self.journey_blocks[self.current_block_index].task_name = self.current_task
 
-            if self.current_block_index < len(self.journey_blocks):
-                self.tray.set_journey_data(self.journey_blocks, self.current_block_index, self.current_task)
-                self._start_current_block()
-            else:
-                self._journey_complete()
-            
-            self._save_state()
+        self.timer.stop()
+        self._paused_remaining = None
+        self._is_waiting_continue = False
+        self.tray.set_waiting_continue(False)
+        self.main_window.set_waiting_continue(False)
+        self.current_block_index += 1
+
+        if self.current_block_index < len(self.journey_blocks):
+            self.tray.set_journey_data(self.journey_blocks, self.current_block_index, self.current_task)
+            self._start_current_block()
+        else:
+            self._journey_complete()
+
+        self._save_state()
 
     @Slot()
     def restart_progress(self) -> None:
@@ -428,6 +533,15 @@ class MyTimeApp(QObject):
         self.task_dialog.set_current_task(task)
         self.task_dialog.show_at_cursor()
     
+    @Slot()
+    def continue_journey(self) -> None:
+        """Start the next block after user clicks continue."""
+        if self._is_waiting_continue:
+            self._is_waiting_continue = False
+            self.tray.set_waiting_continue(False)
+            self.main_window.set_waiting_continue(False)
+            self._start_current_block()
+    
     def show_config(self) -> None:
         """Show configuration dialog."""
         dialog = ConfigDialog(self.storage, self.notification_mgr)
@@ -449,6 +563,8 @@ class MyTimeApp(QObject):
         elapsed = int((datetime.now() - self.session_start_time).total_seconds())
         remaining = max(0, block.duration_seconds - elapsed)
         
+        journey_total = sum(b.duration_seconds for b in self.journey_blocks if b.is_work_block) // 60
+        
         state = AppState(
             current_session_type=block.session_type,
             current_status=SessionStatus.PAUSED if not self.timer.isActive() else SessionStatus.RUNNING,
@@ -457,7 +573,10 @@ class MyTimeApp(QObject):
             sessions_completed_today=len(self.storage.get_today_sessions()),
             current_task=self.current_task,
             session_start_time=self.session_start_time,
-            paused_at=datetime.now() if not self.timer.isActive() else None
+            paused_at=datetime.now() if not self.timer.isActive() else None,
+            journey_total_minutes=journey_total,
+            current_block_index=self.current_block_index,
+            is_waiting_continue=self._is_waiting_continue,
         )
         self.storage.save_state(state)
     
@@ -475,6 +594,13 @@ def main():
     app.setApplicationDisplayName("myTime - Pomodoro Timer")
     app.setDesktopFileName("myTime")
     app.setQuitOnLastWindowClosed(False)
+
+    # Use Fusion style on non-KDE systems for better system theme integration
+    desktop = os.environ.get("XDG_CURRENT_DESKTOP", "").lower()
+    if "kde" not in desktop:
+        fusion = QStyleFactory.create("Fusion")
+        if fusion:
+            app.setStyle(fusion)
 
     # Set official app icon
     icon_path = resource_files("myTime").joinpath("data", "icons", "myTime.svg")

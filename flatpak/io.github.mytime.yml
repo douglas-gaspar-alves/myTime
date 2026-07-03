@@ -10,20 +10,33 @@ finish-args:
   - --socket=wayland
   - --device=dri
   - --socket=pulseaudio
+  - --socket=session-bus
+  - --talk-name=org.kde.StatusNotifierWatcher
+  - --talk-name=org.freedesktop.DBus
+  - --talk-name=org.kde.KGlobalSettings
+  - --talk-name=org.kde.kconfig.notify
 
 modules:
   - name: python3-deps
-    build-options:
-      network: true
     buildsystem: simple
     build-commands:
-      - pip3 install --prefix=/app PySide6
+      - pip3 install --prefix=/app --no-build-isolation --find-links=/run/build/python3-deps PySide6
+    sources:
+      - type: file
+        path: wheels/shiboken6-6.11.1-cp310-abi3-manylinux_2_34_x86_64.whl
+      - type: file
+        path: wheels/pyside6_essentials-6.11.1-cp310-abi3-manylinux_2_34_x86_64.whl
+      - type: file
+        path: wheels/pyside6_addons-6.11.1-cp310-abi3-manylinux_2_34_x86_64.whl
+      - type: file
+        path: wheels/pyside6-6.11.1-cp310-abi3-manylinux_2_34_x86_64.whl
 
   - name: myTime
     buildsystem: simple
     build-commands:
-      - cp -r src/myTime /app/share/myTime
-      - install -Dm644 /app/share/myTime/data/entry.sh /app/bin/myTime
+      - mkdir -p /app/share/myTime /app/bin /app/share/applications /app/share/icons/hicolor/scalable/apps
+      - cp -r . /app/share/myTime
+      - install -m755 /app/share/myTime/data/entry.sh /app/bin/myTime
       - |
         cat > /app/share/applications/io.github.mytime.desktop << 'EOF'
         [Desktop Entry]
@@ -36,7 +49,7 @@ modules:
         Terminal=false
         StartupNotify=true
         EOF
-      - install -Dm644 /app/share/myTime/data/icons/myTime.svg /app/share/icons/hicolor/scalable/apps/io.github.mytime.svg
+      - cp /app/share/myTime/data/icons/myTime.svg /app/share/icons/hicolor/scalable/apps/io.github.mytime.svg
     sources:
       - type: dir
-        path: ../src
+        path: ../src/myTime

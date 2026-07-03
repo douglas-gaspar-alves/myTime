@@ -21,6 +21,8 @@ env/
 # Flatpak build
 build-flatpak/
 .flatpak-builder/
+flatpak-export/
+repo/
 
 # PyInstaller
 *.spec

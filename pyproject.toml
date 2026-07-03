@@ -30,7 +30,7 @@ myTime = "myTime.__main__:main"
 where = ["src"]
 
 [tool.setuptools.package-data]
-"myTime" = ["locales/*.json", "data/icons/*.svg", "data/*.desktop"]
+"myTime" = ["locales/*.json", "data/icons/*.svg", "data/*.desktop", "data/sounds/*.wav"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

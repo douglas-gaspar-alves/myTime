@@ -4,6 +4,7 @@ import subprocess
 import shutil
 from pathlib import Path
 from typing import Optional
+from importlib.resources import files as resource_files
 from myTime.core.models import SessionType
 
 
@@ -28,6 +29,14 @@ class NotificationManager:
         self._notify_send = shutil.which("notify-send")
         self._canberra = shutil.which("canberra-gtk-play")
         self._custom_sound: Optional[str] = None
+        # Bundled default notification sound
+        self._bundled_sound: Optional[str] = None
+        try:
+            bundled = resource_files("myTime").joinpath("data", "sounds", "notification.wav")
+            if bundled.exists():
+                self._bundled_sound = str(bundled)
+        except (ModuleNotFoundError, FileNotFoundError):
+            pass
     
     def is_available(self) -> bool:
         """Check if notify-send is available."""
@@ -37,6 +46,10 @@ class NotificationManager:
         """Set custom notification sound file."""
         if Path(sound_path).exists():
             self._custom_sound = sound_path
+    
+    def get_bundled_sound_path(self) -> str:
+        """Get path to the bundled notification sound."""
+        return self._bundled_sound or ""
 
     def send_journey_start(self, total_work_minutes: int, block_count: int) -> bool:
         """Notify journey started."""
@@ -107,7 +120,8 @@ class NotificationManager:
         message: str, 
         icon: Optional[str] = None,
         duration_ms: int = 6000,
-        urgency: str = "normal"
+        urgency: str = "normal",
+        session_type: Optional[SessionType] = None,
     ) -> bool:
         """Send a custom notification."""
         if not self.enabled or not self._notify_send:
@@ -125,6 +139,12 @@ class NotificationManager:
                 "-u", urgency,
                 "-a", "myTime"
             ], check=False, timeout=2, capture_output=True)
+
+            if self.sound_enabled:
+                if session_type:
+                    self._play_sound(session_type)
+                else:
+                    self._play_sound(SessionType.WORK)
             return True
         except (subprocess.SubprocessError, FileNotFoundError, TimeoutError, OSError):
             return False
@@ -135,29 +155,27 @@ class NotificationManager:
             self._play_file(self._custom_sound)
             return
         
-        if not self._canberra:
-            return
+        # Try freedesktop sound theme via canberra first
+        if self._canberra:
+            sound_map = {
+                SessionType.WORK: "message-new-instant",
+                SessionType.SHORT_BREAK: "complete",
+                SessionType.LONG_BREAK: "alarm-clock-elapsed",
+            }
+            sound_name = sound_map.get(session_type, "message")
+            try:
+                subprocess.run([
+                    self._canberra,
+                    "-i", sound_name,
+                    "-d", "myTime"
+                ], check=False, timeout=1)
+                return
+            except (subprocess.SubprocessError, TimeoutError):
+                pass
         
-        # Map session types to freedesktop sound names
-        sound_map = {
-            SessionType.WORK: "message-new-instant",
-            SessionType.SHORT_BREAK: "complete",
-            SessionType.LONG_BREAK: "alarm-clock-elapsed",
-        }
-        
-        sound_name = sound_map.get(session_type, "message")
-        self._play_freedesktop(sound_name)
-    
-    def _play_freedesktop(self, sound_name: str) -> None:
-        """Play a freedesktop sound theme sound."""
-        try:
-            subprocess.run([
-                self._canberra,
-                "-i", sound_name,
-                "-d", "myTime"
-            ], check=False, timeout=1)
-        except (subprocess.SubprocessError, FileNotFoundError, TimeoutError):
-            pass
+        # Fallback: play bundled sound file
+        if self._bundled_sound:
+            self._play_file(self._bundled_sound)
     
     def _play_file(self, file_path: str) -> None:
         """Play a sound file using paplay/aplay."""
