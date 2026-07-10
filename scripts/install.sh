@@ -1,6 +1,6 @@
 #!/bin/bash
 # Install myTime on the system
-# Usage: ./scripts/install.sh [--flatpak] [--yes] [--install-deps]
+# Usage: ./scripts/install.sh [--flatpak] [--yes]
 
 set -e
 
@@ -10,57 +10,70 @@ PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 # Parse flags
 FLATPAK=false
 YES=false
-INSTALL_DEPS=false
 for arg in "$@"; do
     case $arg in
         --flatpak) FLATPAK=true ;;
         --yes) YES=true ;;
-        --install-deps) INSTALL_DEPS=true ;;
+        --no-deps) SKIP_DEPS=true ;;
         -h|--help)
-            echo "Usage: $0 [--flatpak] [--yes] [--install-deps]"
+            echo "Usage: $0 [--flatpak] [--yes] [--no-deps]"
             echo "  --flatpak      Install via Flatpak (build from source)"
-            echo "  --yes          Non-interactive mode (assume yes to prompts)"
-            echo "  --install-deps Attempt to install system dependencies via package manager"
+            echo "  --yes          Non-interactive mode"
+            echo "  --no-deps      Skip automatic system dependency installation (default: auto-install)"
             exit 0
             ;;
         *) echo "Unknown option: $arg"; exit 1 ;;
     esac
 done
 
-# === Check Python/pip (required for local install) ===
+# === Detect package manager ===
+detect_pkg_manager() {
+    if command -v apt &>/dev/null; then
+        echo "apt"
+    elif command -v pacman &>/dev/null; then
+        echo "pacman"
+    elif command -v dnf &>/dev/null; then
+        echo "dnf"
+    else
+        echo "unknown"
+    fi
+}
+
+install_packages() {
+    local mgr=$(detect_pkg_manager)
+    case "$mgr" in
+        apt) sudo apt update && sudo apt install -y "$@" ;;
+        pacman) sudo pacman -S --needed --noconfirm "$@" ;;
+        dnf) sudo dnf install -y "$@" ;;
+        *) return 1 ;;
+    esac
+}
+
+# === Check Python/pip ===
 check_python() {
     if ! command -v python3 &>/dev/null; then
         echo "ERROR: python3 não encontrado!"
-        echo "  Instale com:"
-        echo "    Debian/Ubuntu: sudo apt install python3 python3-pip python3-venv"
-        echo "    Arch:          sudo pacman -S python python-pip"
-        echo "    Fedora:        sudo dnf install python3 python3-pip"
+        echo "  Instale com: sudo apt install python3 python3-pip"
+        echo "  Ou:          sudo pacman -S python python-pip"
+        echo "  Ou:          sudo dnf install python3 python3-pip"
         exit 1
     fi
-
     if ! command -v pip3 &>/dev/null; then
         echo "ERROR: pip3 não encontrado!"
-        echo "  Instale com:"
-        echo "    Debian/Ubuntu: sudo apt install python3-pip"
-        echo "    Arch:          sudo pacman -S python-pip"
-        echo "    Fedora:        sudo dnf install python3-pip"
+        echo "  Instale com: sudo apt install python3-pip"
         exit 1
     fi
-
-    PYTHON_VERSION=$(python3 -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
-    PYTHON_MAJOR=$(echo "$PYTHON_VERSION" | cut -d. -f1)
-    PYTHON_MINOR=$(echo "$PYTHON_VERSION" | cut -d. -f2)
-    if [ "$PYTHON_MAJOR" -lt 3 ] || ([ "$PYTHON_MAJOR" -eq 3 ] && [ "$PYTHON_MINOR" -lt 11 ]); then
-        echo "ERROR: Python 3.11+ required, found $PYTHON_VERSION"
+    if ! python3 -c "import sys; sys.exit(0 if sys.version_info >= (3,11) else 1)"; then
+        local ver=$(python3 -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
+        echo "ERROR: Python $ver encontrado, requer >= 3.11"
         exit 1
     fi
-    echo "==> Python $PYTHON_VERSION OK"
+    echo "==> Python $(python3 -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')") OK"
 }
 
-# === Check system dependencies ===
-check_deps() {
+# === Install system dependencies automatically ===
+install_system_deps() {
     local missing=()
-    local warnings=()
 
     for cmd in notify-send rsvg-convert gtk-update-icon-cache update-desktop-database xdg-open; do
         if ! command -v "$cmd" &>/dev/null; then
@@ -73,56 +86,44 @@ check_deps() {
         missing+=("libxcb-cursor0")
     fi
 
+    if [ ${#missing[@]} -gt 0 ]; then
+        echo "==> Instalando dependências de sistema..."
+        local mgr=$(detect_pkg_manager)
+        case "$mgr" in
+            apt)
+                install_packages libnotify-bin librsvg2-bin gtk-update-icon-cache desktop-file-utils xdg-utils libxcb-cursor0
+                ;;
+            pacman)
+                install_packages libnotify librsvg gtk-update-icon-cache desktop-file-utils xdg-utils libxcb-cursor
+                ;;
+            dnf)
+                install_packages libnotify librsvg2-tools gtk-update-icon-cache desktop-file-utils xdg-utils libxcb-cursor
+                ;;
+            *)
+                echo "  AVISO: Não foi possível instalar automaticamente."
+                echo "  Instale manualmente:"
+                echo "    Debian/Ubuntu: sudo apt install libnotify-bin librsvg2-bin gtk-update-icon-cache desktop-file-utils xdg-utils libxcb-cursor0"
+                echo "    Arch:          sudo pacman -S libnotify librsvg gtk-update-icon-cache desktop-file-utils xdg-utils libxcb-cursor"
+                echo "    Fedora:        sudo dnf install libnotify librsvg2-tools gtk-update-icon-cache desktop-file-utils xdg-utils libxcb-cursor"
+                if [ "$YES" != true ]; then
+                    read -p "  Continuar mesmo assim? (s/N) " -n 1 -r REPLY
+                    echo
+                    if [[ ! "$REPLY" =~ ^[Ss]$ ]]; then
+                        exit 1
+                    fi
+                fi
+                ;;
+        esac
+    fi
+
+    # Audio deps (opcional - só avisa)
     for cmd in canberra-gtk-play paplay aplay; do
         if ! command -v "$cmd" &>/dev/null; then
-            warnings+=("$cmd")
+            echo "  AVISO: $cmd não encontrado. Áudio pode não funcionar."
+            echo "    Instale com: sudo apt install libcanberra-gtk3 pulseaudio-utils alsa-utils"
+            break
         fi
     done
-
-    if [ ${#missing[@]} -gt 0 ]; then
-        echo "==> Dependências de sistema necessárias ausentes:"
-        printf '    - %s\n' "${missing[@]}"
-        echo ""
-
-        if [ "$INSTALL_DEPS" = true ]; then
-            echo "==> Tentando instalar automaticamente..."
-            if command -v apt &>/dev/null; then
-                sudo apt update && sudo apt install -y libnotify-bin librsvg2-bin gtk-update-icon-cache desktop-file-utils xdg-utils libxcb-cursor0
-            elif command -v pacman &>/dev/null; then
-                sudo pacman -S --needed --noconfirm libnotify librsvg gtk-update-icon-cache desktop-file-utils xdg-utils libxcb-cursor
-            elif command -v dnf &>/dev/null; then
-                sudo dnf install -y libnotify librsvg2-tools gtk-update-icon-cache desktop-file-utils xdg-utils libxcb-cursor
-            else
-                echo "  Gerenciador de pacotes não suportado. Instale manualmente:"
-                echo "    Debian/Ubuntu: sudo apt install libnotify-bin librsvg2-bin gtk-update-icon-cache desktop-file-utils xdg-utils"
-                echo "    Arch:          sudo pacman -S libnotify librsvg gtk-update-icon-cache desktop-file-utils xdg-utils"
-                echo "    Fedora:        sudo dnf install libnotify librsvg2-tools gtk-update-icon-cache desktop-file-utils xdg-utils"
-            fi
-        elif [ "$YES" = true ]; then
-            echo "  Modo --yes: continuando sem dependências opcionais..."
-        else
-            echo "  Instale com:"
-            echo "    Debian/Ubuntu: sudo apt install libnotify-bin librsvg2-bin gtk-update-icon-cache desktop-file-utils xdg-utils libxcb-cursor0"
-            echo "    Arch:          sudo pacman -S libnotify librsvg gtk-update-icon-cache desktop-file-utils xdg-utils libxcb-cursor"
-            echo "    Fedora:        sudo dnf install libnotify librsvg2-tools gtk-update-icon-cache desktop-file-utils xdg-utils libxcb-cursor"
-            echo ""
-            read -p "  Continuar mesmo assim? (s/N) " -n 1 -r REPLY
-            echo
-            if [[ ! "$REPLY" =~ ^[Ss]$ ]]; then
-                exit 1
-            fi
-        fi
-    fi
-
-    if [ ${#warnings[@]} -gt 0 ]; then
-        echo "==> Dependências opcionais ausentes (apenas áudio):"
-        printf '    - %s\n' "${warnings[@]}"
-        echo "  O áudio pode não funcionar. Instale com:"
-        echo "    Debian/Ubuntu: sudo apt install libcanberra-gtk3 pulseaudio-utils alsa-utils"
-        echo "    Arch:          sudo pacman -S libcanberra pulseaudio-utils alsa-utils"
-        echo "    Fedora:        sudo dnf install libcanberra-gtk3 pulseaudio-utils alsa-utils"
-        echo ""
-    fi
 }
 
 if [ "$FLATPAK" = true ]; then
@@ -131,21 +132,21 @@ if [ "$FLATPAK" = true ]; then
 
     if ! command -v flatpak &>/dev/null; then
         echo "ERROR: flatpak not installed!"
-        echo "  Install it first:"
-        echo "    Arch:   sudo pacman -S flatpak flatpak-builder"
-        echo "    Debian: sudo apt install flatpak flatpak-builder"
-        echo "    Fedora: sudo dnf install flatpak flatpak-builder"
-        exit 1
+        [ "$YES" = true ] || read -p "  Instalar flatpak? (s/N) " -n 1 -r REPLY
+        echo
+        if [ "$YES" = true ] || [[ "$REPLY" =~ ^[Ss]$ ]]; then
+            install_packages flatpak flatpak-builder
+        else
+            exit 1
+        fi
     fi
 
-    # Install flatpak-builder via flatpak if not available
     if ! command -v flatpak-builder &>/dev/null; then
         echo "Installing flatpak-builder..."
-        flatpak install -y flathub org.flatpak.Builder
-        alias flatpak-builder="flatpak run org.flatpak.Builder"
+        flatpak install -y flathub org.flatpak.Builder 2>/dev/null || \
+            install_packages flatpak-builder
     fi
 
-    # Ensure KDE runtime
     echo "Ensuring KDE runtime..."
     flatpak install -y flathub org.kde.Platform//6.11 2>/dev/null || true
     flatpak install -y flathub org.kde.Sdk//6.11 2>/dev/null || true
@@ -168,11 +169,17 @@ if [ "$FLATPAK" = true ]; then
     echo "  Busque por 'myTime' no menu de apps"
     echo "  Ou execute: flatpak run io.github.mytime"
     echo "========================================="
+    echo ""
+    echo "  Para desinstalar:"
+    echo "    flatpak uninstall io.github.mytime"
 
 else
     # === Local install (pip + desktop entry) ===
     check_python
-    check_deps
+
+    if [ "$SKIP_DEPS" != true ]; then
+        install_system_deps
+    fi
 
     echo "==> Local install selected"
 
@@ -187,7 +194,6 @@ else
     mkdir -p "$ICON_DIR"
     cp "$PROJECT_DIR/src/myTime/data/icons/myTime.svg" "$ICON_DIR/myTime.svg"
 
-    # Generate PNG icons at common sizes
     if command -v rsvg-convert &>/dev/null; then
         for size in 22 32 48 64 128 256; do
             dir="$HOME/.local/share/icons/hicolor/${size}x${size}/apps"
@@ -197,7 +203,6 @@ else
                 -o "$dir/myTime.png"
         done
     elif command -v convert &>/dev/null; then
-        # imagemagick fallback
         for size in 22 32 48 64 128 256; do
             dir="$HOME/.local/share/icons/hicolor/${size}x${size}/apps"
             mkdir -p "$dir"
@@ -236,4 +241,12 @@ EOF
     echo "  Busque por 'myTime' no menu de apps"
     echo "  Ou execute: myTime"
     echo "========================================="
+    echo ""
+    echo "  Para desinstalar:"
+    echo "    pip3 uninstall myTime"
+    echo "    rm -f ~/.local/share/icons/hicolor/*/apps/myTime.*"
+    echo "    rm -f ~/.local/share/applications/myTime.desktop"
+    echo "    gtk-update-icon-cache -f -t ~/.local/share/icons 2>/dev/null"
+    echo "    update-desktop-database ~/.local/share/applications 2>/dev/null"
+    echo "    rm -rf ~/.config/myTime   # Remove dados (opcional)"
 fi

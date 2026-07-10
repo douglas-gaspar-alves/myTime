@@ -86,13 +86,12 @@ cd myTime
 ./scripts/install.sh
 ```
 
-O comando acima instala o pacote Python, ícones e entrada `.desktop`.
-
-Para instalação não-interativa (útil para scripts):
+O comando acima instala dependências de sistema (via sudo), pacote Python,
+ícones e entrada `.desktop`. Se preferir pular a instalação das deps:
 
 ```bash
-./scripts/install.sh --yes                # não pergunta confirmação
-./scripts/install.sh --yes --install-deps # instala deps de sistema automaticamente
+./scripts/install.sh --no-deps
+./scripts/install.sh --yes --no-deps  # não-interativo + sem deps automáticas
 ```
 
 ### Flatpak
