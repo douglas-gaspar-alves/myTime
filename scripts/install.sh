@@ -68,6 +68,11 @@ check_deps() {
         fi
     done
 
+    # Check libxcb-cursor (Qt6 xcb plugin dependency)
+    if ! ldconfig -p 2>/dev/null | grep -q libxcb-cursor; then
+        missing+=("libxcb-cursor0")
+    fi
+
     for cmd in canberra-gtk-play paplay aplay; do
         if ! command -v "$cmd" &>/dev/null; then
             warnings+=("$cmd")
@@ -82,11 +87,11 @@ check_deps() {
         if [ "$INSTALL_DEPS" = true ]; then
             echo "==> Tentando instalar automaticamente..."
             if command -v apt &>/dev/null; then
-                sudo apt update && sudo apt install -y libnotify-bin librsvg2-bin gtk-update-icon-cache desktop-file-utils xdg-utils
+                sudo apt update && sudo apt install -y libnotify-bin librsvg2-bin gtk-update-icon-cache desktop-file-utils xdg-utils libxcb-cursor0
             elif command -v pacman &>/dev/null; then
-                sudo pacman -S --needed --noconfirm libnotify librsvg gtk-update-icon-cache desktop-file-utils xdg-utils
+                sudo pacman -S --needed --noconfirm libnotify librsvg gtk-update-icon-cache desktop-file-utils xdg-utils libxcb-cursor
             elif command -v dnf &>/dev/null; then
-                sudo dnf install -y libnotify librsvg2-tools gtk-update-icon-cache desktop-file-utils xdg-utils
+                sudo dnf install -y libnotify librsvg2-tools gtk-update-icon-cache desktop-file-utils xdg-utils libxcb-cursor
             else
                 echo "  Gerenciador de pacotes não suportado. Instale manualmente:"
                 echo "    Debian/Ubuntu: sudo apt install libnotify-bin librsvg2-bin gtk-update-icon-cache desktop-file-utils xdg-utils"
@@ -97,9 +102,9 @@ check_deps() {
             echo "  Modo --yes: continuando sem dependências opcionais..."
         else
             echo "  Instale com:"
-            echo "    Debian/Ubuntu: sudo apt install libnotify-bin librsvg2-bin gtk-update-icon-cache desktop-file-utils xdg-utils"
-            echo "    Arch:          sudo pacman -S libnotify librsvg gtk-update-icon-cache desktop-file-utils xdg-utils"
-            echo "    Fedora:        sudo dnf install libnotify librsvg2-tools gtk-update-icon-cache desktop-file-utils xdg-utils"
+            echo "    Debian/Ubuntu: sudo apt install libnotify-bin librsvg2-bin gtk-update-icon-cache desktop-file-utils xdg-utils libxcb-cursor0"
+            echo "    Arch:          sudo pacman -S libnotify librsvg gtk-update-icon-cache desktop-file-utils xdg-utils libxcb-cursor"
+            echo "    Fedora:        sudo dnf install libnotify librsvg2-tools gtk-update-icon-cache desktop-file-utils xdg-utils libxcb-cursor"
             echo ""
             read -p "  Continuar mesmo assim? (s/N) " -n 1 -r REPLY
             echo
@@ -142,8 +147,8 @@ if [ "$FLATPAK" = true ]; then
 
     # Ensure KDE runtime
     echo "Ensuring KDE runtime..."
-    flatpak install -y flathub org.kde.Platform//6.8 2>/dev/null || true
-    flatpak install -y flathub org.kde.Sdk//6.8 2>/dev/null || true
+    flatpak install -y flathub org.kde.Platform//6.11 2>/dev/null || true
+    flatpak install -y flathub org.kde.Sdk//6.11 2>/dev/null || true
 
     echo "Building Flatpak..."
     cd "$PROJECT_DIR"

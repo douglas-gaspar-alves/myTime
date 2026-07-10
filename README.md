@@ -55,6 +55,7 @@ Antes de instalar, certifique-se de ter as dependências de sistema:
 |---|---|---|---|
 | **notify-send** | `libnotify-bin` | `libnotify` | `libnotify` |
 | **rsvg-convert** | `librsvg2-bin` | `librsvg` | `librsvg2-tools` |
+| **libxcb-cursor0** (Qt6) | `libxcb-cursor0` | `libxcb-cursor` | `libxcb-cursor` |
 | **gtk-update-icon-cache** | `gtk-update-icon-cache` | `gtk-update-icon-cache` | `gtk-update-icon-cache` |
 | **update-desktop-database** | `desktop-file-utils` | `desktop-file-utils` | `desktop-file-utils` |
 | **xdg-open** | `xdg-utils` | `xdg-utils` | `xdg-utils` |
@@ -66,13 +67,13 @@ Para instalar tudo de uma vez:
 
 ```bash
 # Debian/Ubuntu
-sudo apt install libnotify-bin librsvg2-bin gtk-update-icon-cache desktop-file-utils xdg-utils libcanberra-gtk3 pulseaudio-utils alsa-utils
+sudo apt install libnotify-bin librsvg2-bin gtk-update-icon-cache desktop-file-utils xdg-utils libxcb-cursor0 libcanberra-gtk3 pulseaudio-utils alsa-utils
 
 # Arch
-sudo pacman -S libnotify librsvg gtk-update-icon-cache desktop-file-utils xdg-utils libcanberra pulseaudio-utils alsa-utils
+sudo pacman -S libnotify librsvg gtk-update-icon-cache desktop-file-utils xdg-utils libxcb-cursor libcanberra pulseaudio-utils alsa-utils
 
 # Fedora
-sudo dnf install libnotify librsvg2-tools gtk-update-icon-cache desktop-file-utils xdg-utils libcanberra-gtk3 pulseaudio-utils alsa-utils
+sudo dnf install libnotify librsvg2-tools gtk-update-icon-cache desktop-file-utils xdg-utils libxcb-cursor libcanberra-gtk3 pulseaudio-utils alsa-utils
 ```
 
 > **Nota:** as dependências de áudio são opcionais — o app funciona sem som, apenas notificações visuais.
@@ -105,12 +106,6 @@ pip install -e ".[dev]"
 
 ```bash
 ./scripts/build_flatpak.sh
-```
-
-### AppImage
-
-```bash
-./scripts/build_appimage.sh
 ```
 
 ### Instalação completa no sistema
@@ -221,13 +216,11 @@ myTime/
 ├── scripts/
 │   ├── install.sh
 │   ├── dev_install.sh
-│   ├── build_flatpak.sh
-│   └── build_appimage.sh
+│   └── build_flatpak.sh
 ├── flatpak/
-│   └── io.github.mytime.yml
-├── pyproject.toml
-├── LICENSE
-└── README.md
+│   ├── io.github.mytime.yml
+│   └── wheels/
+└── mapa
 ```
 
 ---

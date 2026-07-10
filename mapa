@@ -1,0 +1,207 @@
+╔══════════════════════════════════════════════════════════════════════╗
+║                           🍅  myTime   v1.0                        ║
+║         Gerenciador inteligente de Pomodoro e Jornadas              ║
+╚══════════════════════════════════════════════════════════════════════╝
+
+────────────────────────────────────────────────────────────────────────
+                      🌳  ÁRVORE DO PROJETO
+────────────────────────────────────────────────────────────────────────
+
+myTime/
+├── 📄 pyproject.toml               ← Configuração e dependências Python
+├── 📄 README.md                    ← Documentação principal
+├── 📄 LICENSE                      ← MIT License
+├── 📄 mapa                         ← ← VOCÊ ESTÁ AQUI
+├── 📄 AGENTS.md                    ← Instruções para IA
+│
+├── 📁 src/myTime/                  ← ← CÓDIGO FONTE
+│   ├── 📄 __init__.py              ← Metadados do pacote
+│   ├── 📄 __main__.py              ← Ponto de entrada
+│   │
+│   ├── 📁 core/                    ← ⚙️ MOTOR PRINCIPAL
+│   │   ├── 📄 engine.py            ← Motor de jornadas (cálculo Pomodoro)
+│   │   ├── 📄 models.py            ← Modelos de dados (SessionType, Session, Journey)
+│   │   └── 📄 storage.py           ← Persistência em JSON (~/.config/myTime/)
+│   │
+│   ├── 📁 ui/                      ← 🖥️ INTERFACE GRÁFICA (PySide6)
+│   │   ├── 📄 main_window.py       ← Janela principal com timer
+│   │   ├── 📄 tray.py              ← Ícone na bandeja do sistema
+│   │   ├── 📄 config_dialog.py     ← Diálogo de configurações
+│   │   ├── 📄 task_dialog.py       ← Diálogo de tarefas
+│   │   └── 📄 journey_dialog.py    ← Diálogo de jornadas
+│   │
+│   ├── 📁 utils/                   ← 🔧 UTILITÁRIOS
+│   │   ├── 📄 icons.py             ← Geração de ícones dinâmicos
+│   │   ├── 📄 audio.py             ← Áudio (canberra, paplay, aplay)
+│   │   └── 📄 notifications.py     ← Notificações (notify-send)
+│   │
+│   ├── 📁 data/                    ← 📦 DADOS EMPACOTADOS
+│   │   ├── 📁 icons/myTime.svg     ← Ícone do app
+│   │   ├── 📄 myTime.desktop       ← Arquivo .desktop
+│   │   └── 📄 entry.sh             ← Entry point Flatpak
+│   │
+│   └── 📁 locales/                 ← 🌐 TRADUÇÕES
+│       ├── 📄 pt_BR.json           ← Português
+│       └── 📄 en_US.json           ← Inglês
+│
+├── 📁 flatpak/                     ← 📦 EMPACOTAMENTO FLATPAK
+│   ├── 📄 io.github.mytime.yml     ← Manifesto Flatpak
+│   └── 📁 wheels/                  ← Wheels PySide6 pré-baixados
+│
+├── 📁 scripts/                     ← 🛠️ SCRIPTS DE AUTOMAÇÃO
+│   ├── 📄 install.sh               ← Instalação local (pip + ícones + .desktop)
+│   ├── 📄 dev_install.sh           ← Instalação para desenvolvimento
+│   └── 📄 build_flatpak.sh         ← Build e instalação Flatpak
+│
+├── 📁 tests/                       ← 🧪 TESTES
+│   ├── 📄 test_engine.py           ← Testes do motor de jornada
+│   └── 📄 test_storage.py          ← Testes de persistência
+│
+├── 📁 .github/workflows/           ← 🤖 CI/CD
+│   └── 📄 build.yml                ← GitHub Actions (build + release)
+│
+└── 📁 assets/                      ← 🎨 Recursos visuais
+
+────────────────────────────────────────────────────────────────────────
+                        🏗️  ARQUITETURA
+────────────────────────────────────────────────────────────────────────
+
+  ┌───────────────────────────────────────────────────────────┐
+  │                    BANDEJA DO SISTEMA                      │
+  │                    (tray.py)                               │
+  │  ┌─────────────┐  ┌──────────────┐  ┌──────────────────┐ │
+  │  │ Iniciar Foco │  │ Nova Jornada │  │ Configurações    │ │
+  │  └──────┬───────┘  └──────┬───────┘  └────────┬─────────┘ │
+  └─────────┼─────────────────┼────────────────────┼───────────┘
+            │                 │                    │
+  ┌─────────▼─────┐  ┌───────▼───────┐  ┌─────────▼──────────┐
+  │  main_window   │  │ journey_dialog│  │   config_dialog    │
+  │  Timer + Status │  │ Planejar dia  │  │ Personalizar tudo │
+  └───────┬────────┘  └───────┬───────┘  └────────────────────┘
+          │                   │
+  ┌───────▼───────────────────▼───────┐
+  │           engine.py                │
+  │  ● Calcular sequência Pomodoro    │
+  │  ● Alternar foco / pausa          │
+  │  ● Exportar/Importar dados        │
+  └───────────────┬───────────────────┘
+                  │
+  ┌───────────────▼───────────────────┐
+  │           storage.py               │
+  │  ● Salva/carrega histórico JSON   │
+  │  ● Estatísticas diárias/semanais  │
+  │  Arquivo: ~/.config/myTime/       │
+  └───────────────────────────────────┘
+
+  ┌───────────────────────────────────────────────────────────┐
+  │                    UTILITÁRIOS                             │
+  │  ┌─────────────┐  ┌──────────────┐  ┌──────────────────┐ │
+  │  │  audio.py    │  │   icons.py   │  │ notifications.py │ │
+  │  │ canberra     │  │ Progresso    │  │ notify-send      │ │
+  │  │ paplay/aplay │  │ Círculo      │  │ Ícone + texto    │ │
+  │  └─────────────┘  └──────────────┘  └──────────────────┘ │
+  └───────────────────────────────────────────────────────────┘
+
+────────────────────────────────────────────────────────────────────────
+                       🔄  FLUXO DE USO
+────────────────────────────────────────────────────────────────────────
+
+INÍCIO
+  │
+  ▼
+USUÁRIO EXECUTA:  myTime   OU   python -m myTime
+  │
+  ▼
+myTime INICIA NA BANDEJA DO SISTEMA
+  │
+  ├── ▶️  Modo Avulso: Iniciar Foco manualmente
+  │
+  │     FOCO (25min)
+  │       → PAUSA CURTA (5min)
+  │         → FOCO
+  │           → PAUSA CURTA
+  │             → FOCO
+  │               → PAUSA LONGA (15min)
+  │                 → FOCO ...
+  │
+  └── 📅  Modo Jornada: Planejar dia
+
+        Informar: 6h de trabalho
+          │
+          ▼
+        Motor (engine.py) calcula sequência:
+          │
+          ├── FOCO (25min) × 4
+          ├── PAUSA CURTA (5min) × 3
+          ├── PAUSA LONGA (15min) × 1
+          └── Total: ~6h ✓
+  │
+  ▼
+FIM DO DIA: Histórico salvo
+  Estatísticas: diárias, semanais
+
+────────────────────────────────────────────────────────────────────────
+                       📦  DEPENDÊNCIAS
+────────────────────────────────────────────────────────────────────────
+
+  PYTHON (via pip):
+    PySide6 >= 6.6.0    → Interface gráfica Qt6
+    Python >= 3.11
+
+  SISTEMA OBRIGATÓRIO:
+    libnotify          → notify-send (notificações desktop)
+    librsvg            → rsvg-convert (gerar ícones PNG)
+    libxcb-cursor0     → Qt6 plugin xcb (EVITAR CRASH NO MINT/UBUNTU)
+    gtk-update-icon-cache
+    desktop-file-utils
+    xdg-utils          → xdg-open (abrir diretórios)
+
+  SISTEMA OPCIONAL (áudio):
+    libcanberra-gtk3   → canberra-gtk-play
+    pulseaudio-utils   → paplay
+    alsa-utils         → aplay (fallback)
+
+────────────────────────────────────────────────────────────────────────
+                        📥  INSTALAÇÃO
+────────────────────────────────────────────────────────────────────────
+
+  1. INSTALAÇÃO LOCAL (recomendada):
+     ┌──────────────────────────────────────┐
+     │ ./scripts/install.sh                 │
+     │ ./scripts/install.sh --yes           │  ← não-interativo
+     │ ./scripts/install.sh --install-deps  │  ← instala deps automático
+     └──────────────────────────────────────┘
+
+  2. FLATPAK:
+     ┌──────────────────────────────────────┐
+     │ ./scripts/install.sh --flatpak       │
+     └──────────────────────────────────────┘
+
+  3. DESENVOLVIMENTO:
+     ┌──────────────────────────────────────┐
+     │ pip install -e ".[dev]"              │
+     │ python -m myTime                     │
+     │ pytest                               │
+     └──────────────────────────────────────┘
+
+────────────────────────────────────────────────────────────────────────
+                         🧪  TESTES
+────────────────────────────────────────────────────────────────────────
+
+  pytest                    → Todos os testes
+  pytest --cov=myTime       → Com cobertura
+  pytest tests/test_engine.py  → Só o motor
+
+────────────────────────────────────────────────────────────────────────
+                     🚀  CI/CD (GitHub Actions)
+────────────────────────────────────────────────────────────────────────
+
+  Evento: git tag v* && git push origin v*
+
+  ┌──────────────────────────────────────────────────────────┐
+  │  .github/workflows/build.yml                             │
+  │                                                          │
+  │  1. build-flatpak  → Flatpak bundle (io.github.mytime)  │
+  │  2. build-wheel    → Python .whl + .tar.gz              │
+  │  3. release        → GitHub Release com todos artifacts │
+  └──────────────────────────────────────────────────────────┘

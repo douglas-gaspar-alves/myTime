@@ -1,6 +1,6 @@
 app-id: io.github.mytime
 runtime: org.kde.Platform
-runtime-version: '6.8'
+runtime-version: '6.11'
 sdk: org.kde.Sdk
 command: myTime
 
@@ -20,10 +20,16 @@ modules:
   - name: python3-deps
     buildsystem: simple
     build-commands:
-      - pip3 install --prefix=/app --no-build-isolation PySide6
+      - pip3 install --prefix=/app --no-build-isolation --find-links=/run/build/python3-deps PySide6
     sources:
       - type: file
-        path: pyproject.toml
+        path: wheels/shiboken6-6.11.1-cp310-abi3-manylinux_2_34_x86_64.whl
+      - type: file
+        path: wheels/pyside6_essentials-6.11.1-cp310-abi3-manylinux_2_34_x86_64.whl
+      - type: file
+        path: wheels/pyside6_addons-6.11.1-cp310-abi3-manylinux_2_34_x86_64.whl
+      - type: file
+        path: wheels/pyside6-6.11.1-cp310-abi3-manylinux_2_34_x86_64.whl
 
   - name: myTime
     buildsystem: simple
