@@ -239,14 +239,13 @@ class TrayManager(QObject):
             progress=self._current_progress,
             color=color,
             size=self.config.icon_size,
-            show_time=self.config.show_time_in_tray,
-            time_text=self._time_text,
-            font_size=self.config.icon_text_font_size,
+            show_time=False,
+            time_text="",
+            font_size=14,
             text_color=self.config.icon_text_color,
             bg_color=self.config.icon_bg_color,
             bg_opacity=self.config.icon_bg_opacity,
             show_letter=self.config.icon_show_letter,
-            wide_mode=self.config.icon_wide_mode,
         )
         self.tray.setIcon(icon)
 

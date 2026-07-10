@@ -41,12 +41,10 @@ class WorkSchedule:
 
     # Icon customization
     icon_size: int = 48                   # Tray icon size in pixels (22/32/48/64)
-    show_time_in_tray: bool = False       # Render time text IN the icon (small, less readable)
-    icon_text_font_size: int = 14         # Font size for time text in icon
-    icon_text_show_seconds: bool = False  # Show seconds (MM:SS vs MM)
-    icon_text_color: str = "#2c3e50"      # Color for time text
-    icon_show_letter: bool = True         # Show F/P/L letter when time text is off
-    icon_wide_mode: bool = False          # Wide icon: circle + text side by side
+    icon_text_font_size: int = 48         # Font size for timer text on main window clock
+    icon_text_show_seconds: bool = True   # Show seconds (MM:SS vs MM)
+    icon_text_color: str = "#2c3e50"      # Color for text
+    icon_show_letter: bool = True         # Show F/P/L letter in tray (no time shown in tray)
     icon_color_work: str = "#e74c3c"      # Red - focus
     icon_color_short_break: str = "#2ecc71"  # Green - short break
     icon_color_long_break: str = "#3498db"   # Blue - long break

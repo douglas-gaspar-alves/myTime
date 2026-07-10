@@ -239,7 +239,6 @@ class IconManager:
         bg_color: str = "#ecf0f1",
         bg_opacity: int = 255,
         show_letter: bool = True,
-        wide_mode: bool = False,
     ) -> QIcon:
         """Generate a tray icon with optional progress fill.
 
@@ -255,7 +254,6 @@ class IconManager:
             bg_color: Hex color for background circle
             bg_opacity: Background opacity 0-255
             show_letter: If True and show_time is False, render F/P/L letter
-            wide_mode: If True, render circle + text side by side in a larger square icon
         """
         from PySide6.QtGui import QPixmap, QPainter, QColor, QPen, QBrush, QFont
         from PySide6.QtCore import Qt, QRectF
@@ -272,69 +270,6 @@ class IconManager:
         elif show_letter and state in ("work", "short_break", "long_break"):
             text_to_show = {"work": "F", "short_break": "P", "long_break": "L"}.get(state, "")
             text_pen_color = "#ffffff"
-
-        # ─── WIDE MODE ──────────────────────────────────────────────
-        if wide_mode and text_to_show:
-            display_wide = max(size * 2, 80)
-            render_wide = display_wide * 2
-            render_circle = size * 2
-            circle_margin = render_circle * 0.08
-
-            pixmap = QPixmap(render_wide, render_wide)
-            pixmap.fill(Qt.GlobalColor.transparent)
-            painter = QPainter(pixmap)
-            painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-
-            # Circle on the left, vertically centered
-            circle_top = (render_wide - render_circle) // 2
-            circle_rect = QRectF(circle_margin, circle_top + circle_margin,
-                                 render_circle - 2 * circle_margin,
-                                 render_circle - 2 * circle_margin)
-
-            bg_qcolor = QColor(bg_color)
-            bg_qcolor.setAlpha(max(0, min(255, bg_opacity)))
-            painter.setBrush(QBrush(bg_qcolor))
-            painter.setPen(Qt.PenStyle.NoPen)
-            painter.drawEllipse(circle_rect)
-
-            if progress > 0.0 and state not in ("idle", "paused"):
-                sweep = int(progress * 360 * 16)
-                painter.setBrush(QBrush(QColor(fill_color)))
-                painter.setPen(Qt.PenStyle.NoPen)
-                painter.drawPie(circle_rect, 90 * 16, -sweep)
-            elif state == "paused":
-                painter.setBrush(QBrush(QColor(fill_color)))
-                painter.setPen(Qt.PenStyle.NoPen)
-                painter.drawEllipse(circle_rect)
-            elif state in ("work", "short_break", "long_break"):
-                painter.setBrush(QBrush(QColor(fill_color)))
-                painter.setPen(Qt.PenStyle.NoPen)
-                painter.drawEllipse(circle_rect)
-
-            border_width = max(2, render_circle // 32)
-            painter.setBrush(Qt.BrushStyle.NoBrush)
-            painter.setPen(QPen(QColor("#34495e"), border_width))
-            painter.drawEllipse(circle_rect)
-
-            # Text to the right, large font
-            text_left = render_circle + 16
-            text_rect = QRectF(text_left, 0, render_wide - text_left - 16, render_wide)
-            text_render_fs = int(display_wide * 0.32)
-            painter.setPen(QColor(text_pen_color))
-            painter.setFont(QFont("Sans", text_render_fs, QFont.Weight.Bold))
-            painter.drawText(
-                text_rect,
-                Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft,
-                text_to_show,
-            )
-            painter.end()
-
-            scaled = pixmap.scaled(
-                display_wide, display_wide,
-                Qt.AspectRatioMode.KeepAspectRatio,
-                Qt.TransformationMode.SmoothTransformation,
-            )
-            return QIcon(scaled)
 
         # ─── NORMAL (SQUARE) MODE ───────────────────────────────────
         render_size = size * 2

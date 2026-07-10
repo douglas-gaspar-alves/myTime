@@ -222,20 +222,12 @@ class ConfigDialog(QDialog):
         time_group = QGroupBox("Texto no Ícone")
         time_layout = QVBoxLayout(time_group)
 
-        self.show_time_cb = QCheckBox("Mostrar tempo restante")
-        time_layout.addWidget(self.show_time_cb)
-
-        # Sub-options (shown when checkbox is checked)
-        self.time_sub_widget = QWidget()
-        sub_layout = QFormLayout(self.time_sub_widget)
-
         self.icon_font_size = QSpinBox()
-        self.icon_font_size.setRange(6, 48)
+        self.icon_font_size.setRange(6, 72)
+        self.icon_font_size.setValue(48)
         self.icon_font_size.setSuffix(" px")
-        sub_layout.addRow("Tamanho da fonte:", self.icon_font_size)
 
         self.icon_show_seconds = QCheckBox("Mostrar segundos (MM:SS)")
-        sub_layout.addRow(self.icon_show_seconds)
 
         text_color_row = QHBoxLayout()
         self.icon_text_color_preview = QFrame()
@@ -246,23 +238,21 @@ class ConfigDialog(QDialog):
         self.icon_text_color_edit.setFixedWidth(80)
         text_color_row.addWidget(self.icon_text_color_preview)
         text_color_row.addWidget(self.icon_text_color_edit)
-        sub_layout.addRow("Cor do texto:", text_color_row)
 
         self._setup_preview_click(self.icon_text_color_preview, "icon_text_color", self.icon_text_color_edit)
         self.icon_text_color_edit.textChanged.connect(
             lambda text: self._update_preview_frame(self.icon_text_color_preview, text)
         )
 
-        self.time_sub_widget.setVisible(self.show_time_cb.isChecked())
-        self.show_time_cb.toggled.connect(self.time_sub_widget.setVisible)
-        time_layout.addWidget(self.time_sub_widget)
+        fmt = QFormLayout()
+        fmt.addRow("Tamanho da fonte:", self.icon_font_size)
+        fmt.addRow(self.icon_show_seconds)
+        fmt.addRow("Cor do texto:", text_color_row)
+        time_layout.addLayout(fmt)
 
         self.show_letter_cb = QCheckBox("Mostrar letra (F/P/L) — quando o tempo não estiver visível")
         self.show_letter_cb.setChecked(True)
         time_layout.addWidget(self.show_letter_cb)
-
-        self.wide_mode_cb = QCheckBox("Ícone largo — texto ao lado do círculo (recomendado para KDE)")
-        time_layout.addWidget(self.wide_mode_cb)
 
         layout.addWidget(time_group)
 
@@ -441,11 +431,9 @@ class ConfigDialog(QDialog):
             fallback = self.icon_size_group.button(48)
             if fallback:
                 fallback.setChecked(True)
-        self.show_time_cb.setChecked(c.show_time_in_tray)
         self.show_letter_cb.setChecked(c.icon_show_letter if hasattr(c, 'icon_show_letter') else True)
-        self.wide_mode_cb.setChecked(c.icon_wide_mode if hasattr(c, 'icon_wide_mode') else False)
-        self.icon_font_size.setValue(c.icon_text_font_size if hasattr(c, 'icon_text_font_size') else 14)
-        self.icon_show_seconds.setChecked(c.icon_text_show_seconds if hasattr(c, 'icon_text_show_seconds') else False)
+        self.icon_font_size.setValue(c.icon_text_font_size if hasattr(c, 'icon_text_font_size') else 48)
+        self.icon_show_seconds.setChecked(c.icon_text_show_seconds if hasattr(c, 'icon_text_show_seconds') else True)
         self.icon_text_color_edit.setText(c.icon_text_color if hasattr(c, 'icon_text_color') else "#2c3e50")
         for attr, (preview, color_edit) in self._color_buttons.items():
             val = getattr(c, attr, "")
@@ -580,9 +568,7 @@ class ConfigDialog(QDialog):
         self.config.icon_size = self.icon_size_group.checkedId()
         if self.config.icon_size <= 0:
             self.config.icon_size = 48
-        self.config.show_time_in_tray = self.show_time_cb.isChecked()
         self.config.icon_show_letter = self.show_letter_cb.isChecked()
-        self.config.icon_wide_mode = self.wide_mode_cb.isChecked()
         self.config.icon_text_font_size = self.icon_font_size.value()
         self.config.icon_text_show_seconds = self.icon_show_seconds.isChecked()
         self.config.icon_text_color = self.icon_text_color_edit.text()
