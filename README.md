@@ -47,6 +47,36 @@ Com o myTime você pode:
 
 ## 🚀 Instalação
 
+### Pré-requisitos
+
+Antes de instalar, certifique-se de ter as dependências de sistema:
+
+| Dependência | Pacote Debian/Ubuntu | Pacote Arch | Pacote Fedora |
+|---|---|---|---|
+| **notify-send** | `libnotify-bin` | `libnotify` | `libnotify` |
+| **rsvg-convert** | `librsvg2-bin` | `librsvg` | `librsvg2-tools` |
+| **gtk-update-icon-cache** | `gtk-update-icon-cache` | `gtk-update-icon-cache` | `gtk-update-icon-cache` |
+| **update-desktop-database** | `desktop-file-utils` | `desktop-file-utils` | `desktop-file-utils` |
+| **xdg-open** | `xdg-utils` | `xdg-utils` | `xdg-utils` |
+| **canberra-gtk-play** (áudio) | `libcanberra-gtk3` | `libcanberra` | `libcanberra-gtk3` |
+| **paplay** (áudio) | `pulseaudio-utils` | `pulseaudio-utils` | `pulseaudio-utils` |
+| **aplay** (áudio) | `alsa-utils` | `alsa-utils` | `alsa-utils` |
+
+Para instalar tudo de uma vez:
+
+```bash
+# Debian/Ubuntu
+sudo apt install libnotify-bin librsvg2-bin gtk-update-icon-cache desktop-file-utils xdg-utils libcanberra-gtk3 pulseaudio-utils alsa-utils
+
+# Arch
+sudo pacman -S libnotify librsvg gtk-update-icon-cache desktop-file-utils xdg-utils libcanberra pulseaudio-utils alsa-utils
+
+# Fedora
+sudo dnf install libnotify librsvg2-tools gtk-update-icon-cache desktop-file-utils xdg-utils libcanberra-gtk3 pulseaudio-utils alsa-utils
+```
+
+> **Nota:** as dependências de áudio são opcionais — o app funciona sem som, apenas notificações visuais.
+
 ### Via pip (recomendado)
 
 ```bash

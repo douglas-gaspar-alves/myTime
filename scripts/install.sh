@@ -7,6 +7,52 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 
+# === Check system dependencies ===
+check_deps() {
+    local missing=()
+    local warnings=()
+
+    for cmd in notify-send rsvg-convert gtk-update-icon-cache update-desktop-database xdg-open; do
+        if ! command -v "$cmd" &>/dev/null; then
+            missing+=("$cmd")
+        fi
+    done
+
+    for cmd in canberra-gtk-play paplay aplay; do
+        if ! command -v "$cmd" &>/dev/null; then
+            warnings+=("$cmd")
+        fi
+    done
+
+    if [ ${#missing[@]} -gt 0 ]; then
+        echo "==> Dependências de sistema necessárias ausentes:"
+        printf '    - %s\n' "${missing[@]}"
+        echo ""
+        echo "  Instale com:"
+        echo "    Debian/Ubuntu: sudo apt install libnotify-bin librsvg2-bin gtk-update-icon-cache desktop-file-utils xdg-utils"
+        echo "    Arch:          sudo pacman -S libnotify librsvg gtk-update-icon-cache desktop-file-utils xdg-utils"
+        echo "    Fedora:        sudo dnf install libnotify librsvg2-tools gtk-update-icon-cache desktop-file-utils xdg-utils"
+        echo ""
+        read -p "  Continuar mesmo assim? (s/N) " -n 1 -r REPLY
+        echo
+        if [[ ! "$REPLY" =~ ^[Ss]$ ]]; then
+            exit 1
+        fi
+    fi
+
+    if [ ${#warnings[@]} -gt 0 ]; then
+        echo "==> Dependências opcionais ausentes (apenas áudio):"
+        printf '    - %s\n' "${warnings[@]}"
+        echo "  O áudio pode não funcionar. Instale com:"
+        echo "    Debian/Ubuntu: sudo apt install libcanberra-gtk3 pulseaudio-utils alsa-utils"
+        echo "    Arch:          sudo pacman -S libcanberra pulseaudio-utils alsa-utils"
+        echo "    Fedora:        sudo dnf install libcanberra-gtk3 pulseaudio-utils alsa-utils"
+        echo ""
+    fi
+}
+
+check_deps
+
 if [ "${1:-}" = "--flatpak" ]; then
     # === Flatpak install ===
     echo "==> Flatpak install selected"
