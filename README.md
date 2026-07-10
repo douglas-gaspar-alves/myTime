@@ -78,42 +78,53 @@ sudo dnf install libnotify librsvg2-tools gtk-update-icon-cache desktop-file-uti
 
 > **Nota:** as dependências de áudio são opcionais — o app funciona sem som, apenas notificações visuais.
 
-### Via pip (recomendado)
+### Instalação completa (recomendado)
 
 ```bash
-pip install mytime
+git clone https://github.com/douglas-gaspar-alves/myTime.git
+cd myTime
+./scripts/install.sh
 ```
 
-### A partir do código fonte
+O comando acima instala o pacote Python, ícones e entrada `.desktop`.
+
+Para instalação não-interativa (útil para scripts):
 
 ```bash
-git clone https://github.com/douglas/myTime.git
-cd myTime
-pip install -e .
+./scripts/install.sh --yes                # não pergunta confirmação
+./scripts/install.sh --yes --install-deps # instala deps de sistema automaticamente
+```
+
+### Flatpak
+
+```bash
+./scripts/install.sh --flatpak
 ```
 
 ### Desenvolvimento
 
 ```bash
-git clone https://github.com/douglas/myTime.git
+git clone https://github.com/douglas-gaspar-alves/myTime.git
 cd myTime
 python -m venv venv
 source venv/bin/activate
 pip install -e ".[dev]"
 ```
 
-### Flatpak
+### Desinstalação
 
 ```bash
-./scripts/build_flatpak.sh
-```
+# Remove o pacote Python
+pip3 uninstall myTime
 
-### Instalação completa no sistema
+# Remove ícones e entrada .desktop
+rm -f ~/.local/share/icons/hicolor/*/apps/myTime.*
+rm -f ~/.local/share/applications/myTime.desktop
+gtk-update-icon-cache -f -t ~/.local/share/icons 2>/dev/null || true
+update-desktop-database ~/.local/share/applications 2>/dev/null || true
 
-O script `scripts/install.sh` instala o pacote, os ícones e a entrada `.desktop`:
-
-```bash
-./scripts/install.sh
+# Remove dados de configuração (opcional — apaga histórico e preferências)
+# rm -rf ~/.config/myTime
 ```
 
 ---
@@ -126,7 +137,7 @@ O script `scripts/install.sh` instala o pacote, os ícones e a entrada `.desktop
 myTime
 ```
 
-Ou sem instalar:
+Ou em modo desenvolvimento (após `pip install -e ".[dev]"`):
 
 ```bash
 python -m myTime
