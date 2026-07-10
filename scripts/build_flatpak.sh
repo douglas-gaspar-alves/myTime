@@ -27,7 +27,6 @@ if command -v flatpak-builder &>/dev/null; then
         --force-clean \
         --ccache \
         --install-deps-from=flathub \
-        --disable-cleanup \
         --build-options='--share=network' \
         "$BUILD_DIR" "$MANIFEST"
 else
@@ -35,7 +34,6 @@ else
         --force-clean \
         --ccache \
         --install-deps-from=flathub \
-        --disable-cleanup \
         "$BUILD_DIR" "$MANIFEST"
 fi
 

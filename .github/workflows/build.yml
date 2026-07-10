@@ -1,0 +1,191 @@
+name: Build & Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version tag (e.g., v1.0.0)'
+        required: false
+        type: string
+
+permissions:
+  contents: write
+  packages: write
+
+env:
+  APP_NAME: myTime
+  FLATPAK_ID: io.github.mytime
+
+jobs:
+  # ============================================================
+  # Build AppImage (multi-distro matrix)
+  # ============================================================
+  build-appimage:
+    name: Build AppImage (${{ matrix.distro }})
+    strategy:
+      fail-fast: false
+      matrix:
+        distro:
+          - name: ubuntu-22.04
+            image: ubuntu:22.04
+            pkg_cmd: apt-get update && apt-get install -y
+            pkgs: python3 python3-pip python3-venv libnotify-bin librsvg2-bin gtk-update-icon-cache desktop-file-utils xdg-utils libcanberra-gtk3-module pulseaudio-utils alsa-utils wget
+          - name: ubuntu-24.04
+            image: ubuntu:24.04
+            pkg_cmd: apt-get update && apt-get install -y
+            pkgs: python3 python3-pip python3-venv libnotify-bin librsvg2-bin gtk-update-icon-cache desktop-file-utils xdg-utils libcanberra-gtk3-module pulseaudio-utils alsa-utils wget
+          - name: fedora-39
+            image: fedora:39
+            pkg_cmd: dnf install -y
+            pkgs: python3 python3-pip libnotify librsvg2-tools gtk-update-icon-cache desktop-file-utils xdg-utils libcanberra-gtk3 pulseaudio-utils alsa-utils wget
+          - name: fedora-40
+            image: fedora:40
+            pkg_cmd: dnf install -y
+            pkgs: python3 python3-pip libnotify librsvg2-tools gtk-update-icon-cache desktop-file-utils xdg-utils libcanberra-gtk3 pulseaudio-utils alsa-utils wget
+    runs-on: ubuntu-latest
+    container:
+      image: ${{ matrix.distro.image }}
+      options: --user root
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: |
+          ${{ matrix.distro.pkg_cmd }} ${{ matrix.distro.pkgs }}
+
+      - name: Install PyInstaller
+        run: |
+          pip3 install --user PyInstaller
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+
+      - name: Download appimagetool
+        run: |
+          mkdir -p ~/.local/bin
+          wget -q https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage -O ~/.local/bin/appimagetool
+          chmod +x ~/.local/bin/appimagetool
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+
+      - name: Build AppImage
+        run: |
+          cd ${{ github.workspace }}
+          ./scripts/build_appimage.sh
+
+      - name: Test AppImage runs
+        run: |
+          cd ${{ github.workspace }}
+          timeout 10 ./dist/myTime-x86_64.AppImage --help || true
+
+      - name: Upload AppImage artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.APP_NAME }}-${{ matrix.distro.name }}-x86_64.AppImage
+          path: dist/${{ env.APP_NAME }}-x86_64.AppImage
+          retention-days: 7
+
+  # ============================================================
+  # Build Flatpak (Ubuntu latest)
+  # ============================================================
+  build-flatpak:
+    name: Build Flatpak
+    runs-on: ubuntu-latest
+    container:
+      image: ubuntu:24.04
+      options: --user root
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Flatpak & dependencies
+        run: |
+          apt-get update && apt-get install -y flatpak flatpak-builder wget
+          flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
+          flatpak install -y flathub org.kde.Platform//6.8 org.kde.Sdk//6.8 org.flatpak.Builder
+
+      - name: Build Flatpak
+        run: |
+          cd ${{ github.workspace }}
+          ./scripts/build_flatpak.sh
+
+      - name: Upload Flatpak artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.FLATPAK_ID }}.flatpak
+          path: ${{ env.FLATPAK_ID }}.flatpak
+          retention-days: 7
+
+  # ============================================================
+  # Build Python Wheel (for PyPI)
+  # ============================================================
+  build-wheel:
+    name: Build Python Wheel
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install build dependencies
+        run: |
+          pip install --upgrade pip build twine
+
+      - name: Build wheel and sdist
+        run: |
+          python -m build --wheel --sdist
+
+      - name: Upload wheel artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: python-wheel
+          path: dist/*.whl
+          retention-days: 7
+
+      - name: Upload sdist artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: python-sdist
+          path: dist/*.tar.gz
+          retention-days: 7
+
+  # ============================================================
+  # Create GitHub Release with all artifacts
+  # ============================================================
+  release:
+    name: Create Release
+    needs: [build-appimage, build-flatpak, build-wheel]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          pattern: *
+          merge-multiple: false
+
+      - name: List artifacts
+        run: |
+          find artifacts -type f -name "*" | sort
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+          files: |
+            artifacts/**/*.AppImage
+            artifacts/**/*.flatpak
+            artifacts/**/*.whl
+            artifacts/**/*.tar.gz
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

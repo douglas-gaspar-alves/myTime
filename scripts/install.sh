@@ -1,11 +1,61 @@
 #!/bin/bash
 # Install myTime on the system
-# Usage: ./scripts/install.sh [--flatpak]
+# Usage: ./scripts/install.sh [--flatpak] [--yes] [--install-deps]
 
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
+
+# Parse flags
+FLATPAK=false
+YES=false
+INSTALL_DEPS=false
+for arg in "$@"; do
+    case $arg in
+        --flatpak) FLATPAK=true ;;
+        --yes) YES=true ;;
+        --install-deps) INSTALL_DEPS=true ;;
+        -h|--help)
+            echo "Usage: $0 [--flatpak] [--yes] [--install-deps]"
+            echo "  --flatpak      Install via Flatpak (build from source)"
+            echo "  --yes          Non-interactive mode (assume yes to prompts)"
+            echo "  --install-deps Attempt to install system dependencies via package manager"
+            exit 0
+            ;;
+        *) echo "Unknown option: $arg"; exit 1 ;;
+    esac
+done
+
+# === Check Python/pip (required for local install) ===
+check_python() {
+    if ! command -v python3 &>/dev/null; then
+        echo "ERROR: python3 não encontrado!"
+        echo "  Instale com:"
+        echo "    Debian/Ubuntu: sudo apt install python3 python3-pip python3-venv"
+        echo "    Arch:          sudo pacman -S python python-pip"
+        echo "    Fedora:        sudo dnf install python3 python3-pip"
+        exit 1
+    fi
+
+    if ! command -v pip3 &>/dev/null; then
+        echo "ERROR: pip3 não encontrado!"
+        echo "  Instale com:"
+        echo "    Debian/Ubuntu: sudo apt install python3-pip"
+        echo "    Arch:          sudo pacman -S python-pip"
+        echo "    Fedora:        sudo dnf install python3-pip"
+        exit 1
+    fi
+
+    PYTHON_VERSION=$(python3 -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
+    PYTHON_MAJOR=$(echo "$PYTHON_VERSION" | cut -d. -f1)
+    PYTHON_MINOR=$(echo "$PYTHON_VERSION" | cut -d. -f2)
+    if [ "$PYTHON_MAJOR" -lt 3 ] || ([ "$PYTHON_MAJOR" -eq 3 ] && [ "$PYTHON_MINOR" -lt 11 ]); then
+        echo "ERROR: Python 3.11+ required, found $PYTHON_VERSION"
+        exit 1
+    fi
+    echo "==> Python $PYTHON_VERSION OK"
+}
 
 # === Check system dependencies ===
 check_deps() {
@@ -28,15 +78,34 @@ check_deps() {
         echo "==> Dependências de sistema necessárias ausentes:"
         printf '    - %s\n' "${missing[@]}"
         echo ""
-        echo "  Instale com:"
-        echo "    Debian/Ubuntu: sudo apt install libnotify-bin librsvg2-bin gtk-update-icon-cache desktop-file-utils xdg-utils"
-        echo "    Arch:          sudo pacman -S libnotify librsvg gtk-update-icon-cache desktop-file-utils xdg-utils"
-        echo "    Fedora:        sudo dnf install libnotify librsvg2-tools gtk-update-icon-cache desktop-file-utils xdg-utils"
-        echo ""
-        read -p "  Continuar mesmo assim? (s/N) " -n 1 -r REPLY
-        echo
-        if [[ ! "$REPLY" =~ ^[Ss]$ ]]; then
-            exit 1
+
+        if [ "$INSTALL_DEPS" = true ]; then
+            echo "==> Tentando instalar automaticamente..."
+            if command -v apt &>/dev/null; then
+                sudo apt update && sudo apt install -y libnotify-bin librsvg2-bin gtk-update-icon-cache desktop-file-utils xdg-utils
+            elif command -v pacman &>/dev/null; then
+                sudo pacman -S --needed --noconfirm libnotify librsvg gtk-update-icon-cache desktop-file-utils xdg-utils
+            elif command -v dnf &>/dev/null; then
+                sudo dnf install -y libnotify librsvg2-tools gtk-update-icon-cache desktop-file-utils xdg-utils
+            else
+                echo "  Gerenciador de pacotes não suportado. Instale manualmente:"
+                echo "    Debian/Ubuntu: sudo apt install libnotify-bin librsvg2-bin gtk-update-icon-cache desktop-file-utils xdg-utils"
+                echo "    Arch:          sudo pacman -S libnotify librsvg gtk-update-icon-cache desktop-file-utils xdg-utils"
+                echo "    Fedora:        sudo dnf install libnotify librsvg2-tools gtk-update-icon-cache desktop-file-utils xdg-utils"
+            fi
+        elif [ "$YES" = true ]; then
+            echo "  Modo --yes: continuando sem dependências opcionais..."
+        else
+            echo "  Instale com:"
+            echo "    Debian/Ubuntu: sudo apt install libnotify-bin librsvg2-bin gtk-update-icon-cache desktop-file-utils xdg-utils"
+            echo "    Arch:          sudo pacman -S libnotify librsvg gtk-update-icon-cache desktop-file-utils xdg-utils"
+            echo "    Fedora:        sudo dnf install libnotify librsvg2-tools gtk-update-icon-cache desktop-file-utils xdg-utils"
+            echo ""
+            read -p "  Continuar mesmo assim? (s/N) " -n 1 -r REPLY
+            echo
+            if [[ ! "$REPLY" =~ ^[Ss]$ ]]; then
+                exit 1
+            fi
         fi
     fi
 
@@ -51,9 +120,7 @@ check_deps() {
     fi
 }
 
-check_deps
-
-if [ "${1:-}" = "--flatpak" ]; then
+if [ "$FLATPAK" = true ]; then
     # === Flatpak install ===
     echo "==> Flatpak install selected"
 
@@ -75,16 +142,16 @@ if [ "${1:-}" = "--flatpak" ]; then
 
     # Ensure KDE runtime
     echo "Ensuring KDE runtime..."
-    flatpak install -y org.kde.Platform//6.7 2>/dev/null || true
-    flatpak install -y org.kde.Sdk//6.7 2>/dev/null || true
+    flatpak install -y flathub org.kde.Platform//6.8 2>/dev/null || true
+    flatpak install -y flathub org.kde.Sdk//6.8 2>/dev/null || true
 
     echo "Building Flatpak..."
     cd "$PROJECT_DIR"
 
     if command -v flatpak-builder &>/dev/null; then
-        flatpak-builder --force-clean --ccache build-flatpak flatpak/io.github.mytime.yml
+        flatpak-builder --force-clean --ccache --install-deps-from=flathub build-flatpak flatpak/io.github.mytime.yml
     else
-        flatpak run org.flatpak.Builder --force-clean --ccache build-flatpak flatpak/io.github.mytime.yml
+        flatpak run org.flatpak.Builder --force-clean --ccache --install-deps-from=flathub build-flatpak flatpak/io.github.mytime.yml
     fi
 
     flatpak build-bundle build-flatpak io.github.mytime.flatpak io.github.mytime
@@ -99,6 +166,9 @@ if [ "${1:-}" = "--flatpak" ]; then
 
 else
     # === Local install (pip + desktop entry) ===
+    check_python
+    check_deps
+
     echo "==> Local install selected"
 
     # 1. Install Python package

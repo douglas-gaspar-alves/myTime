@@ -1,6 +1,6 @@
 app-id: io.github.mytime
 runtime: org.kde.Platform
-runtime-version: '6.9'
+runtime-version: '6.8'
 sdk: org.kde.Sdk
 command: myTime
 
@@ -20,23 +20,17 @@ modules:
   - name: python3-deps
     buildsystem: simple
     build-commands:
-      - pip3 install --prefix=/app --no-build-isolation --find-links=/run/build/python3-deps PySide6
+      - pip3 install --prefix=/app --no-build-isolation PySide6
     sources:
       - type: file
-        path: wheels/shiboken6-6.11.1-cp310-abi3-manylinux_2_34_x86_64.whl
-      - type: file
-        path: wheels/pyside6_essentials-6.11.1-cp310-abi3-manylinux_2_34_x86_64.whl
-      - type: file
-        path: wheels/pyside6_addons-6.11.1-cp310-abi3-manylinux_2_34_x86_64.whl
-      - type: file
-        path: wheels/pyside6-6.11.1-cp310-abi3-manylinux_2_34_x86_64.whl
+        path: pyproject.toml
 
   - name: myTime
     buildsystem: simple
     build-commands:
+      - pip3 install --prefix=/app --no-build-isolation .
       - mkdir -p /app/share/myTime /app/bin /app/share/applications /app/share/icons/hicolor/scalable/apps
-      - cp -r . /app/share/myTime
-      - install -m755 /app/share/myTime/data/entry.sh /app/bin/myTime
+      - install -m755 data/entry.sh /app/bin/myTime
       - |
         cat > /app/share/applications/io.github.mytime.desktop << 'EOF'
         [Desktop Entry]
@@ -49,7 +43,13 @@ modules:
         Terminal=false
         StartupNotify=true
         EOF
-      - cp /app/share/myTime/data/icons/myTime.svg /app/share/icons/hicolor/scalable/apps/io.github.mytime.svg
+      - cp data/icons/myTime.svg /app/share/icons/hicolor/scalable/apps/io.github.mytime.svg
     sources:
       - type: dir
         path: ../src/myTime
+    cleanup:
+      - /app/lib/python3.*/site-packages/__pycache__
+      - /app/lib/python3.*/site-packages/*.dist-info
+      - /app/lib/python3.*/site-packages/*.egg-info
+      - /app/include
+      - /app/share/pkgconfig
